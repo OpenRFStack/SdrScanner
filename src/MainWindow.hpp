@@ -12,19 +12,21 @@ Contact author for permission: https://github.com/OpenRFStack
 */
 #pragma once
 #include "ScanWorker.hpp"
-#include <QMainWindow>
-#include <QTableWidget>
+
+#include <QDateTime>
 #include <QDoubleSpinBox>
-#include <QSpinBox>
-#include <QPushButton>
 #include <QLabel>
 #include <QLineEdit>
-#include <QTimer>
+#include <QMainWindow>
 #include <QMap>
-#include <QDateTime>
+#include <QPushButton>
 #include <QSettings>
+#include <QSpinBox>
+#include <QTableWidget>
+#include <QTimer>
 
-class MainWindow : public QMainWindow {
+class MainWindow : public QMainWindow
+{
     Q_OBJECT
 public:
     explicit MainWindow(QWidget* parent = nullptr);
@@ -36,7 +38,7 @@ private slots:
     void onStepStarted(au::QuantityD<au::Hertz> cf, int step, int total);
     void onSignalsFound(au::QuantityD<au::Hertz> cf, QVector<Signal> sigs);
     void onScanError(QString msg);
-    void onAgeTick();   // 1-second timer: refresh "Last Seen", drop stale entries
+    void onAgeTick();  // 1-second timer: refresh "Last Seen", drop stale entries
 
 private:
     // ── Controls ──────────────────────────────────────────────────────────────
@@ -50,17 +52,19 @@ private:
     QPushButton*    btn_stop_;
 
     // ── Signal table ──────────────────────────────────────────────────────────
-    QTableWidget*   table_;
-    QLabel*         status_lbl_;
-    QTimer*         age_timer_;
+    QTableWidget* table_;
+    QLabel*       status_lbl_;
+    QTimer*       age_timer_;
 
     // ── Signal registry ───────────────────────────────────────────────────────
-    struct Entry {
+    struct Entry
+    {
         Signal    sig;
         QDateTime first_seen;
         QDateTime last_seen;
         int       hits = 0;
     };
+
     // Key = round(freq_mhz * 100)  → 10 kHz buckets
     QMap<int, Entry> registry_;
 
@@ -71,10 +75,13 @@ private:
     void saveSettings();
     void loadSettings();
     void rebuildTable();
+
     // freq in Hz → 10 kHz bucket key
-    int  freqKey(au::QuantityD<au::Hertz> freq) const {
+    int freqKey(au::QuantityD<au::Hertz> freq) const
+    {
         return (int)std::round(freq.in(au::mega(au::hertz)) * 100);
     }
+
     static QString ageSuffix(const QDateTime& dt);
 };
 

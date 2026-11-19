@@ -11,36 +11,61 @@ Contact author for permission: https://github.com/OpenRFStack
 ========================================================================
 */
 #include "AmqpSession.hpp"
-#include <proton/sender_options.hpp>
-#include <proton/receiver_options.hpp>
-#include <proton/source_options.hpp>
-#include <proton/target_options.hpp>
+
 #include <proton/connection_options.hpp>
+#include <proton/receiver_options.hpp>
 #include <proton/reconnect_options.hpp>
-#include <proton/transport.hpp>
+#include <proton/sender_options.hpp>
+#include <proton/source_options.hpp>
 #include <proton/symbol.hpp>
+#include <proton/target_options.hpp>
+#include <proton/transport.hpp>
+
 #include <chrono>
 
 using namespace std::chrono;
 using json = nlohmann::json;
 
-AmqpSession::AmqpSession() : container_(*this) {}
-
-AmqpSession::~AmqpSession() { stop(); }
-
-void AmqpSession::start(const std::string& url,  const std::string& user,
-                         const std::string& pass, const std::string& req_q,
-                         const std::string& resp_q)
+AmqpSession::AmqpSession()
+    : container_(*this)
 {
-    url_ = url; user_ = user; pass_ = pass; req_q_ = req_q; resp_q_ = resp_q;
-    loop_thread_ = std::thread([this]{ container_.run(); });
-    // Wait until connected (on_sendable sets connected_)
-    std::unique_lock<std::mutex> lk(conn_mu_);
-    conn_cv_.wait_for(lk, seconds(10), [this]{ return connected_.load(); });
 }
 
-void AmqpSession::stop() {
-    if (loop_thread_.joinable()) {
+AmqpSession::~AmqpSession()
+{
+    stop();
+}
+
+void AmqpSession::start(const std::string& url,
+                        const std::string& user,
+                        const std::string& pass,
+                        const std::string& req_q,
+                        const std::string& resp_q)
+{
+    url_         = url;
+    user_        = user;
+    pass_        = pass;
+    req_q_       = req_q;
+    resp_q_      = resp_q;
+    loop_thread_ = std::thread(
+        [this]
+        {
+            container_.run();
+        });
+    // Wait until connected (on_sendable sets connected_)
+    std::unique_lock<std::mutex> lk(conn_mu_);
+    conn_cv_.wait_for(lk,
+                      seconds(10),
+                      [this]
+                      {
+                          return connected_.load();
+                      });
+}
+
+void AmqpSession::stop()
+{
+    if (loop_thread_.joinable())
+    {
         connected_.store(false);
         container_.stop();
         loop_thread_.join();
@@ -49,7 +74,8 @@ void AmqpSession::stop() {
 
 // ── proton callbacks ──────────────────────────────────────────────────────────
 
-void AmqpSession::on_container_start(proton::container& c) {
+void AmqpSession::on_container_start(proton::container& c)
+{
     proton::connection_options copts;
     copts.sasl_allowed_mechs("PLAIN");
     copts.sasl_allow_insecure_mechs(true);
@@ -60,7 +86,7 @@ void AmqpSession::on_container_start(proton::container& c) {
     // restarting the whole GUI app.
     proton::reconnect_options reconn_opts;
     reconn_opts.delay(proton::duration(2000));
-    reconn_opts.max_delay(proton::duration(30000));
+    reconn_opts.max_delay(proton::duration(30'000));
     reconn_opts.max_attempts(0);
     copts.reconnect(reconn_opts);
 
@@ -68,37 +94,40 @@ void AmqpSession::on_container_start(proton::container& c) {
 
     // Request sender with ANYCAST capability (Artemis queue routing)
     proton::sender_options sopts;
-    sopts.target(proton::target_options()
-                     .capabilities({proton::symbol("queue")}));
+    sopts.target(proton::target_options().capabilities({proton::symbol("queue")}));
     sender_ = conn_.open_sender(req_q_, sopts);
 
     // Response receiver with ANYCAST capability
     proton::receiver_options ropts;
-    ropts.source(proton::source_options()
-                     .capabilities({proton::symbol("queue")}));
+    ropts.source(proton::source_options().capabilities({proton::symbol("queue")}));
     receiver_ = conn_.open_receiver(resp_q_, ropts);
 }
 
-void AmqpSession::on_sendable(proton::sender&) {
+void AmqpSession::on_sendable(proton::sender&)
+{
     sender_ready_ = true;
     flush();
     // Notify start() only on the first sendable — this is the point at which
     // conn_ and sender_ are fully initialised and fire()/rpc() are safe to call.
-    if (!connected_.exchange(true)) {
+    if (!connected_.exchange(true))
+    {
         std::lock_guard<std::mutex> lk(conn_mu_);
         conn_cv_.notify_all();
     }
 }
 
-void AmqpSession::on_connection_open(proton::connection&) {
+void AmqpSession::on_connection_open(proton::connection&)
+{
     // conn_ is now valid — flush anything queued before on_sendable fires
     // (harmless if queue is empty; credit check inside flush() guards sending).
     flush();
 }
 
-void AmqpSession::flush() {
+void AmqpSession::flush()
+{
     std::lock_guard<std::mutex> g(out_mu_);
-    while (!out_q_.empty() && sender_.credit() > 0) {
+    while (!out_q_.empty() && sender_.credit() > 0)
+    {
         proton::message m;
         m.body(out_q_.front());
         m.content_type("application/json");
@@ -107,37 +136,50 @@ void AmqpSession::flush() {
     }
 }
 
-void AmqpSession::on_message(proton::delivery&, proton::message& msg) {
+void AmqpSession::on_message(proton::delivery&, proton::message& msg)
+{
     std::string body;
-    try {
+    try
+    {
         auto v = msg.body();
-        if (v.type() == proton::STRING)       body = proton::get<std::string>(v);
-        else if (v.type() == proton::BINARY)  body = std::string(proton::get<proton::binary>(v).begin(),
-                                                                  proton::get<proton::binary>(v).end());
-        else return;
-        auto j   = json::parse(body);
-        auto rid = j.value("request_id", std::string{});
+        if (v.type() == proton::STRING)
+            body = proton::get<std::string>(v);
+        else if (v.type() == proton::BINARY)
+            body = std::string(proton::get<proton::binary>(v).begin(),
+                               proton::get<proton::binary>(v).end());
+        else
+            return;
+        auto                        j   = json::parse(body);
+        auto                        rid = j.value("request_id", std::string{});
         std::lock_guard<std::mutex> g(waiters_mu_);
-        auto it = waiters_.find(rid);
-        if (it != waiters_.end()) {
+        auto                        it = waiters_.find(rid);
+        if (it != waiters_.end())
+        {
             std::lock_guard<std::mutex> wg(it->second->mu);
             it->second->body = body;
             it->second->done = true;
             it->second->cv.notify_one();
         }
-    } catch (...) {}
+    }
+    catch (...)
+    {
+    }
 }
 
-void AmqpSession::on_connection_error(proton::connection& c) {
+void AmqpSession::on_connection_error(proton::connection& c)
+{
     connected_ = false;
 }
-void AmqpSession::on_transport_error(proton::transport&) {
+
+void AmqpSession::on_transport_error(proton::transport&)
+{
     connected_ = false;
 }
 
 // ── Public API ────────────────────────────────────────────────────────────────
 
-void AmqpSession::fire(const nlohmann::json& req) {
+void AmqpSession::fire(const nlohmann::json& req)
+{
     std::string body = req.dump();
     {
         std::lock_guard<std::mutex> g(out_mu_);
@@ -145,13 +187,19 @@ void AmqpSession::fire(const nlohmann::json& req) {
     }
     // conn_ is only valid after on_sendable sets connected_ — guard against
     // callers that race before the proton thread finishes on_container_start.
-    if (!connected_.load()) return;
-    conn_.work_queue().schedule(proton::duration(0), [this]{ flush(); });
+    if (!connected_.load())
+        return;
+    conn_.work_queue().schedule(proton::duration(0),
+                                [this]
+                                {
+                                    flush();
+                                });
 }
 
-json AmqpSession::rpc(const json& req, int timeout_ms, std::atomic<bool>* stop_flag) {
-    std::string rid = req.value("request_id", std::string{});
-    auto waiter = std::make_shared<Waiter>();
+json AmqpSession::rpc(const json& req, int timeout_ms, std::atomic<bool>* stop_flag)
+{
+    std::string rid    = req.value("request_id", std::string{});
+    auto        waiter = std::make_shared<Waiter>();
     {
         std::lock_guard<std::mutex> g(waiters_mu_);
         waiters_[rid] = waiter;
@@ -162,10 +210,13 @@ json AmqpSession::rpc(const json& req, int timeout_ms, std::atomic<bool>* stop_f
     auto deadline = steady_clock::now() + milliseconds(timeout_ms);
     {
         std::unique_lock<std::mutex> lk(waiter->mu);
-        while (!waiter->done) {
-            if (stop_flag && stop_flag->load()) break;
+        while (!waiter->done)
+        {
+            if (stop_flag && stop_flag->load())
+                break;
             auto remaining = duration_cast<milliseconds>(deadline - steady_clock::now());
-            if (remaining <= milliseconds(0)) break;
+            if (remaining <= milliseconds(0))
+                break;
             // Short waits so stop_flag is checked at least every 100 ms.
             // wait_until(deadline) would block the full timeout when stop_ fires
             // mid-wait, causing MainWindow::onStop()'s QThread::wait(8000) to
@@ -179,8 +230,16 @@ json AmqpSession::rpc(const json& req, int timeout_ms, std::atomic<bool>* stop_f
         waiters_.erase(rid);
     }
 
-    if (!waiter->done) return {};
-    try { return json::parse(waiter->body); } catch (...) { return {}; }
+    if (!waiter->done)
+        return {};
+    try
+    {
+        return json::parse(waiter->body);
+    }
+    catch (...)
+    {
+        return {};
+    }
 }
 
 /*

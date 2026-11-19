@@ -11,11 +11,12 @@ Contact author for permission: https://github.com/OpenRFStack
 ========================================================================
 */
 #pragma once
-#include "Spectrum.hpp"
 #include "AmqpSession.hpp"
+#include "Spectrum.hpp"
+#include "au/prefix.hh"
 #include "au/units/hertz.hh"
 #include "au/units/seconds.hh"
-#include "au/prefix.hh"
+
 #include <QThread>
 #include <QVector>
 #include <atomic>
@@ -25,11 +26,12 @@ Contact author for permission: https://github.com/OpenRFStack
 Q_DECLARE_METATYPE(Signal)
 Q_DECLARE_METATYPE(QVector<Signal>)
 
-struct ScanConfig {
-    au::QuantityD<au::Hertz>   start     = au::mega(au::hertz)(80.0);
-    au::QuantityD<au::Hertz>   end       = au::mega(au::hertz)(200.0);
-    au::QuantityD<au::Hertz>   step      = au::mega(au::hertz)(20.0);   // BW per step
-    au::QuantityD<au::Seconds> dwell     = au::milli(au::seconds)(2000.0);
+struct ScanConfig
+{
+    au::QuantityD<au::Hertz>   start        = au::mega(au::hertz)(80.0);
+    au::QuantityD<au::Hertz>   end          = au::mega(au::hertz)(200.0);
+    au::QuantityD<au::Hertz>   step         = au::mega(au::hertz)(20.0);  // BW per step
+    au::QuantityD<au::Seconds> dwell        = au::milli(au::seconds)(2000.0);
     double                     threshold_db = 10.0;
     // AMQP broker
     std::string broker   = "amqp://localhost:5672";
@@ -38,11 +40,12 @@ struct ScanConfig {
     std::string dest_ip  = "127.0.0.1";
 };
 
-class ScanWorker : public QThread {
+class ScanWorker : public QThread
+{
     Q_OBJECT
 public:
     explicit ScanWorker(const ScanConfig& cfg, QObject* parent = nullptr);
-    void halt();   // thread-safe stop
+    void halt();  // thread-safe stop
 
 signals:
     void stepStarted(au::QuantityD<au::Hertz> cf, int step, int total);

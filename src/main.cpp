@@ -11,9 +11,11 @@ Contact author for permission: https://github.com/OpenRFStack
 ========================================================================
 */
 #include "MainWindow.hpp"
+
 #include <QApplication>
 
-int main(int argc, char* argv[]) {
+int main(int argc, char* argv[])
+{
     qRegisterMetaType<Signal>();
     qRegisterMetaType<QVector<Signal>>();
 

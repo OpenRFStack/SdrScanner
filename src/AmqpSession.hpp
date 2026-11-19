@@ -11,24 +11,26 @@ Contact author for permission: https://github.com/OpenRFStack
 ========================================================================
 */
 #pragma once
-#include <string>
-#include <thread>
-#include <mutex>
-#include <condition_variable>
-#include <deque>
-#include <unordered_map>
-#include <memory>
-#include <atomic>
 #include <nlohmann/json.hpp>
-#include <proton/messaging_handler.hpp>
-#include <proton/container.hpp>
 #include <proton/connection.hpp>
-#include <proton/sender.hpp>
-#include <proton/receiver.hpp>
+#include <proton/container.hpp>
 #include <proton/message.hpp>
+#include <proton/messaging_handler.hpp>
+#include <proton/receiver.hpp>
+#include <proton/sender.hpp>
 #include <proton/work_queue.hpp>
 
-class AmqpSession : public proton::messaging_handler {
+#include <atomic>
+#include <condition_variable>
+#include <deque>
+#include <memory>
+#include <mutex>
+#include <string>
+#include <thread>
+#include <unordered_map>
+
+class AmqpSession : public proton::messaging_handler
+{
 public:
     AmqpSession();
     ~AmqpSession();
@@ -42,32 +44,35 @@ public:
 
     // Send req, wait for response matching req["request_id"]. Returns {} on timeout.
     // Thread-safe; may be called from any thread except the proton thread.
-    nlohmann::json rpc(const nlohmann::json& req,
-                       int                   timeout_ms  = 20000,
-                       std::atomic<bool>*    stop_flag   = nullptr);
+    nlohmann::json
+    rpc(const nlohmann::json& req, int timeout_ms = 20'000, std::atomic<bool>* stop_flag = nullptr);
 
     // Send without waiting for a response.
     void fire(const nlohmann::json& req);
 
     void stop();
-    bool isConnected() const { return connected_.load(); }
+
+    bool isConnected() const
+    {
+        return connected_.load();
+    }
 
 private:
     // ── proton callbacks (all on proton thread) ──────────────────────────────
-    void on_container_start(proton::container&)               override;
-    void on_sendable       (proton::sender&)                  override;
-    void on_message        (proton::delivery&, proton::message&) override;
-    void on_connection_open  (proton::connection&)            override;
-    void on_connection_error (proton::connection&)            override;
-    void on_transport_error  (proton::transport&)             override;
+    void on_container_start(proton::container&) override;
+    void on_sendable(proton::sender&) override;
+    void on_message(proton::delivery&, proton::message&) override;
+    void on_connection_open(proton::connection&) override;
+    void on_connection_error(proton::connection&) override;
+    void on_transport_error(proton::transport&) override;
 
-    void flush();   // must be called on proton thread
+    void flush();  // must be called on proton thread
 
     // ── state ────────────────────────────────────────────────────────────────
     std::string url_, user_, pass_, req_q_, resp_q_;
 
-    proton::container  container_;
-    std::thread        loop_thread_;
+    proton::container container_;
+    std::thread       loop_thread_;
 
     proton::connection conn_;
     proton::sender     sender_;
@@ -75,21 +80,23 @@ private:
     bool               sender_ready_ = false;
 
     // Outgoing queue (any thread → proton thread via work_queue)
-    std::mutex               out_mu_;
-    std::deque<std::string>  out_q_;
+    std::mutex              out_mu_;
+    std::deque<std::string> out_q_;
 
     // RPC waiters
-    struct Waiter {
+    struct Waiter
+    {
         std::mutex              mu;
         std::condition_variable cv;
         std::string             body;
         bool                    done = false;
     };
-    std::mutex                                              waiters_mu_;
+
+    std::mutex                                               waiters_mu_;
     std::unordered_map<std::string, std::shared_ptr<Waiter>> waiters_;
 
-    std::atomic<bool> connected_{false};
-    std::mutex        conn_mu_;
+    std::atomic<bool>       connected_{false};
+    std::mutex              conn_mu_;
     std::condition_variable conn_cv_;
 };
 
