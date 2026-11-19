@@ -53,6 +53,9 @@ FetchContent_Declare(Au
     GIT_TAG "0.5.1"
     GIT_SHALLOW TRUE
     EXCLUDE_FROM_ALL)
+# Au registers its own gtest targets with CTest; they are never built here,
+# so `ctest` reported 30+ *_NOT_BUILT failures. Keep Au's tests out of our suite.
+set(AU_ENABLE_TESTING OFF CACHE BOOL "" FORCE)
 FetchContent_MakeAvailable(Au)
 
 # ── Executable ────────────────────────────────────────────────────────────────
